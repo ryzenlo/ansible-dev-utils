@@ -1,0 +1,69 @@
+- hosts: localhost
+  name: VM Provision
+  vars:
+    #ip,tap,mac_addr
+    gateway_ip: 192.168.0.1
+    instance_bind_ip: 192.168.0.160
+    instance_mac_addr: "DE:AD:BE:EF:60:67"
+    bridge_name: devops0
+    tap_name: devops_tap60
+    #
+    ubuntu_cloudimg_name: "ubuntu-20.04-server-cloudimg-amd64-disk-kvm.img"
+    cloud_storage_dir_path: "/data/vm/linux/cloudimg"
+    ubuntu_cloudimg_uri: "https://mirrors.cloud.tencent.com/ubuntu-cloud-images/releases/20.04/release/ubuntu-20.04-server-cloudimg-amd64-disk-kvm.img"
+    #
+    cloudinit_dir_path: "/data/vm/linux/cloudinit"
+    cloudinit_cdrom_name: "cloudinit1.iso"
+    cloudinit_userdata:
+       user_name: "ryzen"
+       group_name: "ryzen"
+       user_pwd: "1234567"
+       ssh_public_key: |
+         ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCrLzLT3aj9AGRBIW5k7xoNbu/xQN2sdJep6fR7+XIN7ZrV35uikuCqizK9QuRh3DO+9hajCTWxduJkOSU7sgwxJq6SFkl02eQ1LarmVAAHHIVP0u+XKhZIC0XV3fQe+dFXWHr0G0/asY2muKQkSx7wt0jrVHvfuC9zyGMSl5zDYbUjEHVmabZArUvA2pjh/6mzbS6Z8VFfGwxADKseivDZ8XLC90ZIEkkNj1HTj4s9/2sO/CSspCi8TsTpSDkVRNDcxfVoXl3Z4kXLfGqbH6iJGHfgt6n4mhGmATyzzIdiHwxfSjATVwTP04VeNF5RqvDikbvuAeJ8iGX86Qkf1P+ZBQj5kFRSgjvMnQQSNvMtVN7VM8salSidg9iQRXaOLhH2f+d6/gCHuNpx4O8utaMNiTLVRxgfBs16SxbS2isLvcYK3ljspyGmMMmBivYMSDfYgFg9h2JY7ClmgoerfCwmRJpot3kl8o4TOfmivtUIt/oJFtE1YdQ1MFDC3v7O3kuRDrJOaTOTT500bDU31Tlsz8Xzv8arlV0hEt5oOHcUQjkXeSFxFvyMbYYu0gJhYL3P+WkEeNc+Fi59PMBGmmsyBVFXC7izzK04+vl4p3ycMZQoKkFEUeo5exYXcnyVP+DcEyryFqFv2rK4Sa0aVgaEA7UAuMfNeavkRnh96ve6mQ== root@0884d0c23b2d
+       apt_source_uri: "http://mirrors.163.com/ubuntu/"
+    #qcow2
+    qcow2_file_size: "10G"
+    qcow2_dir_path: "/data/vm/linux/storage"
+    qcow2_file_name: "{{instance_name}}.qcow2"
+    qcow2_recreate: true
+
+  tasks:
+     - name: Ensure cloud img exist
+       include_tasks: ./subtasks/download_cloudimg.yml
+
+     - name: Create cloud-init CD-ROM
+       include_tasks: ./subtasks/create_cloudinit.yml
+
+     - name: Create qcow2 disk file
+       include_tasks: ./subtasks/create_qcow2.yml
+
+     - name: Create palybook file to run instance
+       template:
+         src: ./template/run_playbook.j2
+         dest: "./run/{{instance_name}}.yml"
+
+     - name: Create inventory file for the instance
+       template:
+         src: ./template/instance_inventory.j2
+         dest: "../host/{{instance_name}}.host"
+
+     - block:
+        - name: run the newly created instance to config and poweroff
+          include_tasks: ./subtasks/run_vm.yml   
+       become: true
+
+- name: Wait for the instance to power on and off
+  gather_facts: false
+  hosts: localhost
+  tasks:
+    - name: Waiting for the instance to power on
+      pause:
+       seconds: 5
+
+    - name:  Waiting for the instance to shutdown
+      ansible.builtin.shell: "ps -ef | grep -v grep  | grep qemu-system-x86_64 | grep {{instance_name}}"
+      retries: 15
+      delay: 14
+      ignore_errors: yes
+      register: result
+      until: result.stdout.find("qemu-system-x86_64") == -1

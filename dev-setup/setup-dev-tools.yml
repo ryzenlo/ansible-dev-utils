@@ -1,0 +1,15 @@
+- hosts: devops_ubuntu*
+  name: Setup docker and pip
+  gather_facts: true
+  become: true
+  vars:
+    ansible_install_method: package
+    pip_install_packages:
+      - name: docker
+    docker_users:
+      - jenkins
+      - ryzon1
+      - git
+  roles:
+    - geerlingguy.docker
+    - geerlingguy.pip

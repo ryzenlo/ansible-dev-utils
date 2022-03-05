@@ -1,0 +1,47 @@
+- name: Check if the directory exists for qcow2 disk files 
+  stat:
+    path: "{{qcow2_dir_path}}"
+  register: qcow2_dir_stat_result
+
+- name: Create an directory for the qcow2 disk files
+  file:
+    path: "{{qcow2_dir_path}}"
+    state: directory
+  when: not qcow2_dir_stat_result.stat.exists
+
+- name: Check if qcow2 disk file exist
+  stat:
+    path: "{{qcow2_dir_path}}/{{qcow2_file_name}}"
+  register: qcow2_stat_result
+
+- name: Quiting...
+  block:
+     - name: qcow2 disk file already exists 
+       debug:
+         msg: "{{qcow2_dir_path}}/{{qcow2_file_name}} exists, please specify another name for qcow2 disk"
+
+     - meta: end_play
+  when: qcow2_stat_result.stat.exists and qcow2_recreate == false
+
+- name: Recreate qcow2 disk file
+  block:
+     - name: delete qcow2 disk file
+       file: 
+        path: "{{qcow2_dir_path}}/{{qcow2_file_name}}"
+        state: absent
+
+  when: qcow2_stat_result.stat.exists and qcow2_recreate == true 
+
+- name: Create and print
+  block:
+     - name: create qcow2 disk file
+       shell: >
+         qemu-img create -b {{cloud_storage_dir_path}}/{{ubuntu_cloudimg_name}} 
+         -f qcow2 {{qcow2_dir_path}}/{{qcow2_file_name}} {{qcow2_file_size}};
+         qemu-img info {{qcow2_dir_path}}/{{qcow2_file_name}}
+       register: qemu_result
+     
+     - name: print qcow2 info
+       debug:
+         msg: "{{qemu_result.stdout}}"
+  when: not qcow2_stat_result.stat.exists or (qcow2_stat_result.stat.exists and qcow2_recreate == true)

@@ -1,0 +1,52 @@
+- hosts: localhost
+  name: Setup Bridge
+  gather_facts: false
+  become: true
+  
+  vars:
+    eth_original_ip: 192.168.0.140
+    eth_new_ip: 192.168.0.141
+    br_name: devops0
+    br_ip: "{{eth_original_ip}}"
+    br_mask: 24
+    eth_if: enp34s0
+    gw: 192.168.0.1
+
+  tasks:
+    - name: "Check bridge [{{br_name}}] is exist"
+      shell: >
+        ip link show {{br_name}} type bridge
+      ignore_errors: true
+      register: check_result
+    
+    - name: create bridge if not
+      shell: >
+         ip link add name {{br_name}} type bridge;
+      when: check_result.stderr.find('does not exist') != -1
+
+    - name: Ensure bridge is up
+      shell: >
+         ip link set {{br_name}} up
+
+    - name: Check bridge has ip assigned
+      shell: > 
+         ip addr show {{br_name}} type bridge
+      register: check_result
+
+    - name: Assign IP to the bridge
+      shell: >
+          ip addr flush dev {{eth_if}} && \
+          ip addr add dev {{br_name}} {{br_ip}}/{{br_mask}} && \
+          ip route add default via {{gw}} dev {{br_name}} && \
+          ip addr add dev {{eth_if}} {{eth_new_ip}}/{{br_mask}} 
+      when: check_result.stdout.find('inet ') == -1
+
+    - name: "Check {{eth_if}} is added to the bridge"
+      shell: > 
+         bridge link
+      register: check_result     
+      
+    - name: "Adding {{eth_if}} into the bridge"
+      shell: > 
+         ip link set {{eth_if}} master {{br_name}}
+      when: check_result.stdout.find(eth_if) == -1

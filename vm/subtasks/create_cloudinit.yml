@@ -1,0 +1,30 @@
+- name: Check if the directory exists for qcow2 disk files 
+  stat:
+    path: "{{cloudinit_dir_path}}"
+  register: cloudinit_dir_stat_result
+
+- name: Create an directory for the qcow2 disk files
+  file:
+    path: "{{cloudinit_dir_path}}"
+    state: directory
+  when: not cloudinit_dir_stat_result.stat.exists
+
+- name: Generate user-data file from template
+  template:
+    src: ./template/user-data.j2
+    dest: ../tmp/user-data
+
+- name: Generate meta-data file
+  file:
+    path: ../tmp/meta-data
+    state: touch
+
+- name: Ensure xorriso is installed
+  pacman:
+    name: libisoburn
+    state: present
+
+- name: Generate CD-ROM file
+  shell: >
+     xorriso -as genisoimage -output {{cloudinit_dir_path}}/{{cloudinit_cdrom_name}}
+     -volid CIDATA -joliet -rock ../tmp/user-data ../tmp/meta-data

@@ -1,0 +1,22 @@
+- name: Check if the directory exists for ubuntu cloud images
+  stat:
+    path: "{{cloud_storage_dir_path}}"
+  register: cloud_storage_dir_stat_result
+
+- name: Create an directory for the ubuntu cloud images
+  file:
+    path: "{{cloud_storage_dir_path}}"
+    state: directory
+  when: not cloud_storage_dir_stat_result.stat.exists
+
+- name: Check if ubuntu cloud img exists
+  stat:
+    path: "{{cloud_storage_dir_path}}/{{ubuntu_cloudimg_name}}"
+  register: check_stat_result
+  
+- name: Download ubuntu cloud img if not exists
+  get_url:
+    url: "{{ubuntu_cloudimg_uri}}"
+    dest: "{{cloud_storage_dir_path}}"
+    mode: '0755'
+  when: not check_stat_result.stat.exists

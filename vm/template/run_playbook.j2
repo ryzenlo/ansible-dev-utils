@@ -1,0 +1,48 @@
+- hosts: localhost
+  name: Setup Tap, attach to bridge, run the specified vm instance
+  gather_facts: false
+  become: true
+  
+  vars:
+    instance_name: {{instance_name}}
+    bridge_name: {{bridge_name}}
+    tap_name: {{tap_name}}
+    qcow2_dir_path: {{qcow2_dir_path}}
+    qcow2_file_name: {{qcow2_file_name}}
+    cloudinit_dir_path: {{cloudinit_dir_path}}
+    cloudinit_cdrom_name: {{cloudinit_cdrom_name}}
+    instance_mac_addr: {{instance_mac_addr}}
+
+  tasks:
+   - name: "Check Tap {{tap_name}}"
+     shell: >
+       ip tuntap show mode tap name {{tap_name}}
+     register: check_tap_result
+
+   - name: "Create Tap {{tap_name}} before run vm "
+     shell: >
+       ip tuntap add mode tap name {{tap_name}}
+     when: check_tap_result.stdout.find(tap_name) == -1
+   
+   - name: Make sure tap is run
+     shell: >
+       ip link set dev {{tap_name}} up
+
+   - name: Add tap to the bridge
+     shell: >  
+       ip link set {{tap_name}} master {{bridge_name}}
+
+   - name: "Run {{instance_name}}..."
+     shell: >
+       sudo qemu-system-x86_64  \
+        -name {{instance_name}} \
+        -machine accel=kvm,type=q35 \
+        -cpu host \
+        -m 2G \
+        -boot c \
+        -device virtio-net-pci,netdev=network0,mac={{instance_mac_addr}} \
+        -netdev tap,id=network0,ifname={{tap_name}},script=no,downscript=no \
+        -drive if=virtio,format=qcow2,file={{qcow2_dir_path}}/{{qcow2_file_name}} \
+        -drive if=virtio,format=raw,file={{cloudinit_dir_path}}/{{cloudinit_cdrom_name}} \
+        -daemonize  \
+        -display none

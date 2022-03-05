@@ -1,0 +1,17 @@
+- hosts: devops_ubuntu*
+  name: Setup gitea
+  gather_facts: true
+  become: true
+
+  environment:
+    http_proxy: http://192.168.0.140:10809
+    https_proxy: http://192.168.0.140:10809
+
+  roles:
+    - {role: do1jlr.gitea, tags: gitea}
+  vars:
+    # Here we assume we are behind a reverse proxy that will
+    # handle https for us, so we bind on localhost:3000 using HTTP
+    gitea_fqdn: 'jenkins.mydevops.dev'
+    gitea_protocol: http
+    gitea_start_ssh: true

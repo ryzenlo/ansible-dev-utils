@@ -1,0 +1,53 @@
+#cloud-config
+groups:
+ - {{cloudinit_userdata.group_name}}
+users:
+ - name: {{cloudinit_userdata.user_name}}
+   primary_group: {{cloudinit_userdata.group_name}}
+   home: /home/{{cloudinit_userdata.user_name}}
+   plain_text_passwd: '{{cloudinit_userdata.user_pwd}}'
+   shell: /bin/bash
+   sudo: ALL=(ALL) NOPASSWD:ALL
+   {% if cloudinit_userdata.ssh_public_key is defined and cloudinit_userdata.ssh_public_key -%}
+   ssh_authorized_keys:
+     - {{cloudinit_userdata.ssh_public_key}}
+   {%- endif %}
+
+apt:
+  primary:
+    - arches: [default]
+      uri: {{cloudinit_userdata.apt_source_uri}}
+package_update: true
+
+write_files:
+ - path: /etc/cloud/cloud.cfg.d/99-custom-networking.cfg
+   permissions: '0644'
+   content: |
+     network:
+       config: disabled
+ - content: |
+     network:
+         ethernets:
+             enp0s2:
+                 dhcp4: false
+                 addresses:
+                   - {{instance_bind_ip}}/24
+                 gateway4: {{gateway_ip}}
+                 nameservers:
+                    addresses:
+                      - 223.5.5.5
+                      - 223.6.6.6
+                    search: []
+                 match:
+                     macaddress: {{ instance_mac_addr| lower }}
+                 set-name: enp0s2
+         version: 2
+   path: /etc/netplan/90-cloud-init.yaml
+
+runcmd:
+ - rm /etc/netplan/50-cloud-init.yaml
+ - netplan generate
+ - netplan apply
+
+power_state:
+  mode: poweroff
